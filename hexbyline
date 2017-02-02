@@ -1,0 +1,55 @@
+#!/usr/bin/perl
+
+use 5.001 ; use strict ; use warnings ; 
+use Getopt::Std ; getopts ':c:l1' , \my %o ; 
+use Term::ANSIColor qw[ color :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
+
+while ( <>  ) { 
+    my $org = $_ ;
+    chomp ; 
+    print "$.:\t" if $o{':'} ; 
+    print $_ , "\n"  if $o{1} ; 
+
+    $_ = $org if $o{l} ;
+    my @chars = split // , $_  ; 
+    my @hex = map { sprintf "%02x" , ord $_ } @chars ; #  for ( @chars ) { 
+    do { splice @hex , $_ * $o{c} , 0 , '' for reverse 0 .. @hex / $o{c} } if $o{c}  ;
+    print $o{1} ? "\t" : ''  , join ( " " , @hex ) , "\n" ; 
+}
+
+
+=encoding utf8
+
+=head1
+
+  $0
+
+    改行で区切られたデータについて、
+    16進ダンプを出力する。
+
+オプション : 
+   -: ; 入力の行番号も出力する。
+   -1 ; 入力も表示する。
+   -c num ; 各行の先頭からnumバイトごとに出力時に、間隔を広げた表示をする。
+   -l ; 改行文字も除去しないで、出力に用いる。
+
+考えられる使い方: 
+   ・ よく似た文字列を比較するとき
+ 
+
+=cut
+
+
+## ヘルプの扱い
+sub VERSION_MESSAGE {}
+sub HELP_MESSAGE {
+    use FindBin qw[ $Script ] ; 
+    $ARGV[1] //= '' ;
+    open my $FH , '<' , $0 ;
+    while(<$FH>){
+        s/\$0/$Script/g ;
+        print $_ if s/^=head1// .. s/^=cut// and $ARGV[1] =~ /^o(p(t(i(o(ns?)?)?)?)?)?$/i ? m/^\s+\-/ : 1;
+    }
+    close $FH ;
+    exit 0 ;
+}
