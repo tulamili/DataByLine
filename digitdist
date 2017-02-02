@@ -65,11 +65,11 @@ sub main_read {
 		} ; 
 	}
 
-	print STDERR CYAN "Heading Line:\t$header" if defined $header ; # chompしてないことに注意。
 	printing () ; 
 }
 
 sub printing { 
+	print STDERR CYAN "Heading Line:\t$header" if defined $header ; # chompしてないことに注意。
 	out_eachpos ()  ;
 	print "\n"  if $o{W} ;
 	out_eachwidth () if $o{W} ; 
@@ -160,7 +160,7 @@ sub cyc_rep ( ) {
     $num =~ s/(?<=\d)(?=(\d\d\d)+($|\D))/,/g ; # 3桁毎にコンマで区切る
     print STDERR GREEN $num , ":\t" , sprintf "%02d:%02d:%02d" , ( localtime )[2,1,0] ;  #  <-- 標準出力に書込み
     print STDERR "\t" , GREEN  time - $time0 , " sec.\t($Script)" ; 
-    print STDERR BLUE "\tRead Line Contents:\t" , $. ; 
+    print STDERR BLUE "\tRead Line Contents:\t" , $_ ; 
     $time0 = time ;
     print STDERR "\n" ;
 }
