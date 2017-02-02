@@ -1,0 +1,139 @@
+#!/usr/bin/perl
+use 5.001 ; use strict ; use warnings ; 
+use Getopt::Std ; getopts ':!_012cfv' , \my%o ;
+use Term::ANSIColor qw[ :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
+use FindBin qw[ $Script ] ; 
+
+$| = 1 if $o{'!'} ;
+
+my $lc = 0 ; # ファイルごとに読んだ行数。
+my $fc = 0 ; # それまでに読んだファイルの数
+my $pc = 0 ; # 標準出力に出力した行数
+my $nc = 0 ; # 標準出力に出力しなかった行数
+
+sub main1 ( ) ; 
+sub main2 ( ) ; 
+sub subinfo ( )  ;
+sub printX ( $ ) ; 
+
+sub printN ( $ ) {  print "$.:\t$_[0]" } ; 
+sub printB ( $ ) {  print $_[0] } ; 
+
+* printC = * printB ;  
+* printC = * printN if  $o{':'} ; 
+
+sub printX ( $ ) { print $ARGV , "\t" ; printC ( $_[0] ) } ;
+
+* printX = * printC if ! $o{f} ; 
+
+main1 if ! $o{2} ; 
+main2 if $o{2} ;
+subinfo ;
+exit ; 
+
+sub main1 ( ) { 
+	# 最初のファイルだけ先頭行を表示する。
+	if ( $o{1} ) { 
+		my $head = <>  ;
+		$lc ++ ; 
+		$pc ++ ;
+		printX $head ;
+	}
+
+	while ( <> ) {
+	  # 先頭行(各ファイルについて)の処理
+	  if ( $lc ++ == 0 && ! $o{0} ) { 
+	    #print STDERR CYAN $_  if $o{'='} ;
+	    $nc ++ ;
+	    next ;
+	  }
+
+	  printX $_  ;
+	  $pc ++ ; 
+
+	  # ファイルの継ぎ目の検出
+	  if ( eof ) { #  eof に括弧をつけないこと
+	  	$. = 0 if ! $o{c} ;
+ 	    $lc = 0 ; 
+	    $fc ++ ;  
+	    print "\n" if $o{'_'} ;
+	  } 
+	}
+}
+
+sub main2 ( ) { 
+	my $head = <> ; 
+	
+	if ( $o{1} ) { 
+		printX $head ; 
+		$pc ++ ;
+	} 
+	else {
+		$nc ++ ;
+	} 
+
+	while ( <> ) { 
+		if ( $_ ne $head ) { 
+			printX $_ ; $pc ++ 
+		} 
+		else { 
+			$nc ++ ;
+		}
+		if ( eof ) { 
+			$. = 0 if ! $o{'c'} ;
+			$fc ++ ;
+			print "\n" if $o{'_'} ; 
+		}	
+	}
+}
+
+sub subinfo ( ) { 
+	print STDERR CYAN "Files number: $fc, output lines using input: $pc, non-output lines: $nc. ($Script)\n" if $o{v} ; 
+}
+
+exit 0 ;
+
+# ヘルプの扱い
+sub VERSION_MESSAGE {}
+sub HELP_MESSAGE {
+    use FindBin qw[ $Script ] ; 
+    $ARGV[1] //= '' ;
+    open my $FH , '<' , $0 ;
+    while(<$FH>){
+        s/\$0/$Script/g ;
+        print $_ if s/^=head1// .. s/^=cut// and $ARGV[1] =~ /^o(p(t(i(o(ns?)?)?)?)?)?$/i ? m/^\s+\-/ : 1;
+    }
+    close $FH ;
+    exit 0 ;
+}
+
+=encoding utf8
+
+=head1
+
+$0 ファイル1 ファイル2 ファイル3 .. 
+cat file | $0 
+
+機能: 
+   各ファイルの先頭行は出力しないで、連結する。
+   連結の継ぎ目は、直前のファイルに改行文字が無ければ、自動的に追加される。
+
+オプション: 
+  -0  ; 各ファイルの先頭を出力しない、ということを解除する。
+  -1  ; 最初のファイルだけ先頭行を表示する。
+  -2  ; 最初の先頭行と一致する行は出力しない。 
+  -_  ; 各ファイルの最後で 空行を出力。
+
+  -f  ; ファイル名も各行の先頭に出力する。
+  -:  ; 行番番号を出力する。
+  -c  ; 行番号を出力する際に、ファイル毎に分けずに、一連の番号を出力する。
+
+  # -=  ; (標準出力には出さなかった) 各ファイルの先頭行を標準エラー出力に出力する。
+  -v  ; 何個のファイルを処理したかを標準エラー出力に出力する。
+  -!  ; バッファに貯めない。
+
+要改良: 
+    空のファイルを読んだときの挙動を決めよう。
+
+=end
+

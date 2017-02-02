@@ -1,0 +1,111 @@
+#!/usr/bin/perl
+use 5.001 ; use strict ; use warnings ;
+use Getopt::Std ; getopts 'd:g:s:quy:', \my %o or HELP_MESSAGE () ;
+use Term::ANSIColor qw[ :constants ] ; $Term::ANSIColor::AUTORESET = 1 ; 
+
+sub init_proc ( ) ;
+sub main_work ( ) ;
+sub apnd_info ( ) ;
+sub rand_gen ( ) ; 
+* rand_gen = $o{u} ? defined $o{d}? * rand_gen_unif_fmt : * rand_gen_unif : * rand_gen_int ; 
+
+my $r ; # 列数
+my $c ; # 行数
+my $u ; # 上限
+my $d ; # 下限
+my $add ; # 各乱数に加算する数
+my $dgt ; # 実数を表示する際に、小数点以下何桁を表示するか。
+my $fmt ; # sprintf に渡すフォーマット指示文字列。 $dgt から生成。
+my $seed ; 
+init_proc ; 
+main_work ;
+apnd_info ;
+exit 0 ;
+
+sub rand_gen_int { $add + 1 + int rand $u } ; 
+sub rand_gen_unif { $add + rand () * $u } ; 
+sub rand_gen_unif_fmt { sprintf $fmt , $add + rand () * $u } ; 
+
+sub init_proc ( ) {
+    #$o{s} = defined $o{s} ? srand $o{s} : srand ; # ランダムシードの設定
+    srand do{ $o{s}//='';my $s=($o{s}=~s/(.*)!$//)?$1:1<<32; $seed = $o{s}||int rand($s) } ;
+    #@ARGV = grep { $_ eq '-q' and $o{q} = 1 xor 1 } @ARGV ; # -q がどこに現れてもオプション扱いとする。
+ 	# 列数と行数
+    ( $r, $c ) = split /,/ , $o{g} // '' , 2 ; 
+    $c //= 1 ; # 列数の未指定値
+    $r //= 5 ; # 行数の未指定値
+    # 生成する乱数の範囲
+    ( $d , $u ) = split /(?:,|\.\.)/ , $o{y} // '' , 2 ;
+    $d //= 6 ;
+    do { $u = $d ; $d = $o{u} ? 0:1 } if ! defined $u ;
+    ($d,$u) = ($u,$d) if $u < $d ; 
+    $d -- if ! $o{u} ;
+    $add = $d ;
+    $u = $u - $add ;
+
+    # 表示する桁数
+    $dgt = $o{d} // 3 ;
+    $fmt = '%0.' . $dgt . 'f' ;
+}
+
+sub main_work ( ) {
+	for ( 1 .. $r ) { 
+		print join "\t" , map { rand_gen } 1 .. $c ;
+		print "\n" ; 
+	}
+}
+
+sub apnd_info ( ) {
+	exit 0 if $o{q} ;
+    $0 =~ s|.*/||;
+    $u += $d ; $d ++ ;
+    print STDERR CYAN "used random seed = $seed ($0 -g $r,$c -y $d..$u )\n" ;
+}
+
+## ヘルプの扱い
+sub VERSION_MESSAGE {}
+sub HELP_MESSAGE {
+    use FindBin qw[ $Script ] ; 
+    $ARGV[1] //= '' ;
+    open my $FH , '<' , $0 ;
+    while(<$FH>){
+        s/\$0/$Script/g ;
+        print $_ if s/^=head1// .. s/^=cut// and $ARGV[1] =~ /^o(p(t(i(o(ns?)?)?)?)?)?$/i ? m/^\s+\-/ : 1;
+    }
+    close $FH ;
+    exit 0 ;
+}
+
+=encoding utf8 
+
+=head1
+
+  $0 
+  $0 -g 行数,列数  -y 下限..上限
+  $0 -g 行数,列数  -y 下限,上限
+
+  乱数行列を生成。各要素は 1以上で上限を超えない整数になる。
+
+ オプション:  
+   -g n1,n2 ; 乱数をn1行n2列の形で出力する。
+   -y n1,n2 ; 乱数の値をn1とn2の範囲とする。 -y n1..n2 のようなコンマ(,) でなくて .. も許容される。
+
+   -d num : 必要に応じ、小数点以下の桁数を指定。四捨五入(sprintfに依存)。-u と共に用いる。
+   -q     : ランダムシードの情報を出力しない。
+   -s num : num でランダムシードの指定。2^32 (約43億<10^10) で割った剰余が渡される。
+   -u     : 生成する乱数を、整数では無くて、0以上で上限を超えない実数の一様乱数とする。
+
+  --help : この $0 のヘルプメッセージを出す。  perldoc -t $0 | cat でもほぼ同じ。
+  --help opt : オプションのみのヘルプを出す。opt以外でも options と先頭が1文字以上一致すれば良い。
+
+ 例:
+
+  $0 -y 1000 -g 5,8 ; # 縦5行 横8列で要素が 1 から 1000 までの一様乱数の 乱数行列を生成する。
+  $0 -q -g 2,3 -y1..5  ; # -q によりランダムシードの情報を表示しない。
+  $0 -u        ; # 実数(整数とは限らない) 一様乱数の出力。
+  $0 -s 123 -u -d50 -g1,10 -y1 ; # 小数点以下50桁表示されるはず。2進数48桁で内部が動く事が分かる。
+
+ 開発上のメモ: 
+   引数の取り込みの部分のプログラムがあまりきれいに書けていないので、リファクタが必要と考えられる。
+=cut
+

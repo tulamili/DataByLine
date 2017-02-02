@@ -1,0 +1,57 @@
+#!/usr/bin/perl 
+
+use 5.015 ; use strict ; use warnings ; 
+
+my %lineStr ; 
+my %seen  ; # 各ファイル内で既に発生したかどうかを表す
+my $files = 0 ; # 読み取ったファイルの数
+
+while ( <> )  { 
+
+    chomp ; # ファイルの最後が改行で終わらない場合に、意図しない動作をすることがあるので。
+    $lineStr { $_  } ++ unless $seen{ $_ } ++  ;
+    
+    if ( eof )   # この eof に () をつけてはいけない。 
+    {
+        %seen = () ;
+        $files ++ ;  
+        # print "$.:\n" ; 
+    }
+} 
+
+#print STDERR $files ; 
+#exit 0 ;
+
+for ( keys %lineStr ) { 
+
+    print $_ , "\n" if $lineStr { $_ } == $files ;
+
+
+}
+
+
+
+
+
+# ヘルプの扱い
+sub VERSION_MESSAGE {}
+sub HELP_MESSAGE {
+    use FindBin qw[ $Script ] ; 
+    $ARGV[1] //= '' ;
+    open my $FH , '<' , $0 ;
+    while(<$FH>){
+        s/\$0/$Script/g ;
+        print $_ if s/^=head1// .. s/^=cut// and $ARGV[1] =~ /^o(p(t(i(o(ns?)?)?)?)?)?$/i ? m/^\s+\-/ : 1;
+    }
+    close $FH ;
+    exit 0 ;
+}
+=encoding utf8
+=head1
+  
+  $0 
+
+   複数のファイルの各行を要素と見なし、全てのファイルに現れたもののみを出力する。
+
+
+=cut

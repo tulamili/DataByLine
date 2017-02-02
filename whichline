@@ -1,0 +1,155 @@
+#!/usr/bin/perl
+
+use 5.001 ; use strict ; use warnings ; 
+use Getopt::Std ; getopts 'e:h:i:n:qr:t:w1!~@:' , \my %o ; 
+use Term::ANSIColor qw/color :constants/ ; $Term::ANSIColor::AUTORESET = 1 ;
+use FindBin '$Script' ;
+use autodie qw[ open ] ; 
+
+sub main () ; 
+sub mtgLNums () ; # 表現を与えて、行番号を表す数を出力する関数
+sub n2lines () ; # 行番号の数から、その場所の行を選んで出力する関数
+sub cyc_rep ( ) ;
+sub HELP_MESSAGE ($) ;
+sub VERSION_MESSAGE () ; 
+
+$/ = "\r\n" if $o{w} ;
+$| = 1 if $o{'!'};
+my $rev_cnd = $o{'~'} ? ! 0 : ! 1 ; # 条件を反転するかどうか。! 演算子は ?:より強い。
+my $judge ; 
+my $target_string ; 
+my ($start, $len) ; 
+my $cyc_len = $o{'@'} // 1e7 ; # 何行毎にレポートを発生させるか。
+my ($time0, $time00 ) = (time) x 2  ;
+my $totallines ; 
+
+$judge = 
+    defined $o{e} ? sub { $_ eq $target_string }  # 完全一致
+  : defined $o{h}|| $o{t} ? sub { substr ( $_ , $start, $len ) eq $target_string } # 前方または後方の一致
+  : defined $o{i} ? sub { index ( $_ , $target_string ) > -1 }  # 部分一致
+  : defined $o{r} ? sub { return $_ =~ m/$target_string/ } # 正規表現の一致
+  : sub { 1 } ; # この行に到達することはあるが、使うことはない。
+
+
+main ;  
+exit 0 ; 
+
+sub main () { 
+  if ( grep { defined $o{$_} } qw [ e h i r t ] )   { mtgLNums }
+  elsif ( defined $o{n} ) { n2lines }
+  else { HELP_MESSAGE (1) } # tar や gzip も 引数なしだと 1が返る。 
+  $totallines //= $. ; # <-- tricky usage..
+  print STDERR BRIGHT_GREEN $totallines , " lines read for target input; " , time - $time00 , " sec. ($Script)\n" unless $o{q} ;
+} 
+
+sub mtgLNums () { 
+  chomp ( $target_string = $o{e} // $o{h} // $o{i} // $o{t} // $o{r} // '' ) ; # 最後の'' は動作の想定はしていない。
+  while ( <> ) {  
+    chomp ; 
+    print $. , "\n" if $rev_cnd xor $judge->() ; # 合致すれば行番号を出力する。
+    cyc_rep if $cyc_len && $. % $cyc_len == 0 ; 
+  }
+}
+
+sub n2lines () { 
+  open my $FH, '<' , $o{n} ;
+  $SIG{INT} = sub { close $FH ; exit 130 } ; 
+
+  # この段落は効率が良いと言えるだろうか? とりあえず、プログラムに将来の新機能追加のために、共通パートの多いコードに変えた。
+  if ( ! $o{1} ) { 
+    pipe my $RH , my $WH ; 
+    my @lines = <$FH> ; grep { chomp $_ } @lines ; 
+    @lines = sort { $a <=> $b } @lines ; 
+    print {$WH} $_ , "\n" for @lines ; 
+    close $FH ; $FH = $RH ; close $WH ;   
+  }
+
+  my $last = 0 ;
+  outer : 
+  while ( <$FH> ) { 
+    chomp ; my $num = int $_ ; # $_ は指定される行番号の数となる。 
+    next if $last == $num ; # <-- 同じ数がある場合の対策
+    while ( <> ) { 
+      cyc_rep if $cyc_len && $. % $cyc_len == 0 ; 
+      next if $. < $num ; 
+      chomp ; print $_ , "\n" ; 
+      $last = $num ; 
+      $totallines = $. ;
+      next outer ; 
+    } 
+    last ; 
+  }
+  close $FH ;
+}
+
+sub cyc_rep ( ) {
+    use FindBin '$Script' ;
+    $| = 1 ; 
+    my $num = $. ; 
+    $num =~ s/(?<=\d)(?=(\d\d\d)+($|\D))/,/g ; # 3桁毎にコンマで区切る
+    print STDERR GREEN $num , ":\t" , sprintf "%02d:%02d:%02d" , ( localtime )[2,1,0] ;  #  <-- 標準出力に書込み
+    print STDERR "\t" , GREEN  time - $time0 , " sec.\t($Script)" ; 
+    $time0 = time ;
+    print STDERR "\n" ;
+}
+
+
+# ヘルプの扱い
+sub VERSION_MESSAGE () {}
+sub HELP_MESSAGE ($) {
+    my $ret_cd = $_[0] // 0 ;
+    use FindBin qw [ $Script ] ; 
+    $ARGV[1] //= '' ;
+    open my $FH , '<' , $0 ;
+    while( <$FH> ){
+        s/\$0/$Script/g ;
+        print $_ if $ARGV[1] eq 'opt' ? m/^\ +\-/ : s/^=head1// .. s/^=cut// ;
+    }
+    close $FH ;
+    exit $ret_cd  ;
+}
+
+=encoing utf8 
+
+=head1
+
+  $0
+
+   入力の各行について、-e で指定される文字列に一致する行の番号を出力したり、
+   -n で指定されるファイルの中身の各行の数値が指す行位置の行を出力したりする。
+
+   注意: 
+     * 行番号の始まりは 1 である。 0 ではない。
+     * "入力" は 数百万、数億行を仮定しているが、"該当する行番号" は100万行程度以下を想定。
+
+
+ 使用例: 
+    同じような場面で使う、異なる2個の機能が実装されていることに注意。
+
+    cat somefile | $0 -e string
+    $0 -n numbers  somefile 
+    $0 -n <( $0 -e string file1 ) file2  # <-- 便利な使い方であろう。
+
+ オプション: 
+
+  [行番号出力のオプション]
+   -e str ; その文字列に一致する行を探し出し、その行番号を改行区切りで出力。
+   -h str ; -e に似ているが、先頭からの一致を見る。
+   -i str ; -e に似ているが、部分一致に用いる。
+   -t str ; -e に似ているが、末尾からの一致を見る。
+   -r str ; -e に似ているが、正規表現での一致を見る。(<- -- 丁寧なテストが必要かも知れない。)
+     上記の -h, -i, -t, -r の4個の条件は複数を組みあわせることは、現状出来ない。
+
+  [行番号の数列から行を抽出するオプション]
+   -n file  ; そのファイルの中身は改行区切りで数が並んでいると見なす。その数位置の行を入力ファイルから取り出す。
+   -1 ; file が -n　指定された場合、その中身は昇順に並んでいると見なす。遅延評価(lazy estimation)を可能にする。
+
+  [共通のオプション]
+   -! ; バッファに貯めない。
+   -~ ; 抽出条件を逆転する。
+   -@ num : 入力ファイルを読む際に、何行毎に標準エラー出力に報告を出すか。未指定なら1000万行毎。
+   -q ; 最後に標準エラー出力に出される二次情報を出力しない。
+   -w ; 各行末が "CRLF" (\r\n) であると仮定する。Windows 形式。
+
+
+=cut
