@@ -1,0 +1,164 @@
+#!/usr/bin/perl
+
+use 5.018 ; use strict ; use warnings ; 
+use 5.018 ;
+use Getopt::Std ; getopts '=@:0:g:m:Wu' , \my %o ; 
+use Term::ANSIColor qw[ color :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
+use List::Util qw[ minstr maxstr ] ;
+
+do { use open IO => ':encoding(utf8)' } if $o{u} ; 
+sub cyc_rep ( )  ; 
+my ($time00 , $time0) = (time)x2 ; 
+my $cyc_len = $o{'@'} // 1e7 ; # 何行毎にレポートを発生させるか。
+my $header = <> if $o{'='} ; 
+my $maxdis = defined $o{m} ? $o{m} : 'Inf' ; # 
+my $excepted = $o{0} if defined $o{0} ; 
+
+my %simple_counts ; # 桁長ごとの、単純な出現個数
+my %dcounts ; # 桁長ごとの、異なる文字列の個数
+my %filled ;  # 桁長ごとの、異なる文字列の個数 があふれを起こしているかどうか。
+my %chars ; # ; 桁長ごとの、各文字が何個出現したか。
+my $newdis = 0 ;
+
+my %scP ; # 桁位置ごとの、単純な出現個数
+#my %dcountsP ; # 桁位置ごとの、異なる文字列の個数
+my %charsP ; # ; 桁位置ごとの、各文字が何個出現したか。
+
+print STDERR CYAN "Heading Line:\t$header" if defined $header ; # chompしてないことに注意。
+
+main_read () ; 
+exit 0 ; 
+
+
+sub main_read { 
+
+	while ( <> ) { 
+		chomp ;
+		cyc_rep if $cyc_len && $. % $cyc_len == 0 ; 
+
+		my $len = length ( $_ ) ; 
+		$len = 'Inf' if defined $excepted && m/$excepted/ ; 
+		my @chars = split // , $_ ;
+		if ( $o{W} ) { 
+			$simple_counts { $len } ++ ; 
+			$chars {$len} { $_ } ++ for @chars ;
+
+			%{ $dcounts {$len } } = () unless exists $dcounts { $len } ;
+			if ( ! exists $dcounts { $len } { $_ } && ++ $newdis > $maxdis ) { # <- 混乱しやすい書き方かも
+				$filled { $len } ++ ; #print RED "$_ "
+			} else { $dcounts { $len } { $_ } ++ ; }
+		} ;
+
+		do {
+			next if $len == 'Inf' ; 
+			my $pos = 1 ; 
+			for ( @chars ) { 
+				$scP{$pos}++ ; 
+				$charsP { $pos }{ $_ } ++ ; 
+				$pos ++ ; 
+			}
+		} ; 
+	}
+
+	out_eachpos ()  ;
+	print "\n"  if $o{W} ;
+	out_eachwidth () if $o{W} ; 
+}
+
+
+sub out_eachpos { 
+
+	print join ( "\t" , qw[ pos counts distinct used_char ] ) , "\n" ;
+	for ( sort {$a<=>$b} keys %scP ) { 
+		my @out ; 
+		push @out , $_ . ':' ; 
+		push @out , $scP { $_ } ; 
+
+		my @keys =  keys %{ $charsP{$_} } ; 
+		my $dis = @keys ;
+		#$dis .=  (  $filled {$_} ? '+' : '' )  ;
+		push @out , $dis ; #. defined $filled {$_} ? '+' : '' ;
+
+		push @out , '[' . (join '', sort keys %{$charsP{$_}}). ']' ;  
+		#push @out , '"'.minstr(@keys).'".."'.maxstr(@keys).'"'  ;
+		my $d = $_ ;
+		#push @out , join "," , map { qq["$_"x$dcounts{$d}{$_}]} splice @keys , 0 , $o{g} || 5 ;
+		print join ( "\t" , @out) , "\n" ;
+	}
+}
+
+
+sub out_eachwidth { 
+
+	print join ( "\t" , qw[ width counts distinct used_char range examples ] ) , "\n" ;
+	for ( sort {$a<=>$b} keys %simple_counts ) { 
+		my @out ; 
+		push @out , $_ . ':' ; 
+		push @out , $simple_counts { $_ } ; 
+
+		my @keys =  keys %{ $dcounts{$_} } ; 
+		my $dis = @keys ;
+		$dis .=  (  $filled {$_} ? '+' : '' )  ;
+		push @out , $dis ; #. defined $filled {$_} ? '+' : '' ;
+
+		push @out , '[' . (join '', sort keys %{$chars{$_}}). ']' ;  
+		push @out , '"'.minstr(@keys).'".."'.maxstr(@keys).'"'  ;
+		my $d = $_ ;
+		push @out , join "," , map { qq["$_"x$dcounts{$d}{$_}]} splice @keys , 0 , $o{g} || 5 ;
+		print join ( "\t" , @out) , "\n" ;
+	}
+}
+
+
+=encoding utf8
+
+=head1
+
+  $0
+
+    改行で区切られたデータについて、
+    文字の桁数ごとに分けて、下記の情報を出力する : 
+       個数の合計、異なる文字列の個数
+       出現した異なる文字とその個数、
+
+ オプション:
+    -0 regex ; 設定された異常値の正規表現による指定。出力時に文字幅-1として扱われる。例 : ^999$ 
+	-m num ; 異なる文字列を何個までカウントするかの指定。メモリ不足による異常が起こることを避けるため。
+	-u ; 入出力を utf8 と見なす。(Perl 5.18 で動作確認済み。5.1でも大丈夫だろうか? )
+
+
+ 開発上のメモ: 
+   -u で utf8 としてうまく扱うようにすることとしたい。
+   -0 str で 異常値,例外値の正規表現による指定としたい。
+   * 環境変数を読み取って、日本語で無い場合は、英語のヘルプマニュアルを出せるようにしたい。
+
+
+
+=cut
+
+
+sub cyc_rep ( ) {
+    use FindBin '$Script' ;
+    local $| = 1 ; 
+    my $num = $. ; 
+    $num =~ s/(?<=\d)(?=(\d\d\d)+($|\D))/,/g ; # 3桁毎にコンマで区切る
+    print STDERR GREEN $num , ":\t" , sprintf "%02d:%02d:%02d" , ( localtime )[2,1,0] ;  #  <-- 標準出力に書込み
+    print STDERR "\t" , GREEN  time - $time0 , " sec.\t($Script)" ; 
+    print STDERR BLUE "\tRead Line Contents:\t" , $. ; 
+    $time0 = time ;
+    print STDERR "\n" ;
+}
+
+## ヘルプの扱い
+sub VERSION_MESSAGE {}
+sub HELP_MESSAGE {
+    use FindBin qw[ $Script ] ; 
+    $ARGV[1] //= '' ;
+    open my $FH , '<' , $0 ;
+    while(<$FH>){
+        s/\$0/$Script/g ;
+        print $_ if s/^=head1// .. s/^=cut// and $ARGV[1] =~ /^o(p(t(i(o(ns?)?)?)?)?)?$/i ? m/^\s+\-/ : 1;
+    }
+    close $FH ;
+    exit 0 ;
+}
