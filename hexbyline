@@ -1,10 +1,15 @@
 #!/usr/bin/perl
 
 use 5.001 ; use strict ; use warnings ; 
-use Getopt::Std ; getopts ':c:l1' , \my %o ; 
+use Getopt::Std ; getopts ':ac:lu1' , \my %o ; 
 use Term::ANSIColor qw[ color :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
 
+use Encode qw[ decode_utf8 ] ;
+#binmode STDIN , ":utf8" ;
+binmode STDOUT, ":utf8" if $o{u} ; 
+
 while ( <>  ) { 
+    $_ = decode_utf8 ( $_ ) if $o{u} ;
     my $org = $_ ;
     chomp ; 
     print "$.:\t" if $o{':'} ; 
@@ -13,8 +18,26 @@ while ( <>  ) {
     $_ = $org if $o{l} ;
     my @chars = split // , $_  ; 
     my @hex = map { sprintf "%02x" , ord $_ } @chars ; #  for ( @chars ) { 
+#    do { splice @hex , $_ * $o{c} , 0 , '' for reverse 0 .. @hex / $o{c} } if $o{c}  ;
+
+    if ( $o{a} ) { 
+      for ( 0 .. $#chars ) { 
+        $chars [$_ ] = '\n' if $chars[ $_ ] eq "\n" ; 
+        $chars [$_ ] = '\r' if $chars[ $_ ] eq "\r" ; 
+        $chars [$_ ] = '\t' if $chars[ $_ ] eq "\t" ; 
+        $chars [$_ ] .= ' ' x ( ( $hex[$_] eq "feff" ? 4 : length $hex[ $_ ] > 2 ? 3 : 2  ) -length $chars [$_] ); # <-- - 汎用的ではない。トリッキー VisualWidth を使うべし???
+      }
+      # grep { $_ .= ' '} @chars ; 
+      do { splice @chars , $_ * $o{c} , 0 , '' for reverse 0 .. @chars / $o{c} } if $o{c}  ;
+      print $o{1} ? "\t" : ''  , join ( " " , @chars ) ; 
+      print "\n" ;
+    }
+
     do { splice @hex , $_ * $o{c} , 0 , '' for reverse 0 .. @hex / $o{c} } if $o{c}  ;
-    print $o{1} ? "\t" : ''  , join ( " " , @hex ) , "\n" ; 
+
+    print $o{1} ? "\t" : ''  , join ( " " , @hex ) ; 
+    print "\n" ;
+
 }
 
 
@@ -30,8 +53,10 @@ while ( <>  ) {
 オプション : 
    -: ; 入力の行番号も出力する。
    -1 ; 入力も表示する。
+   -a ; ダンプに合わせて、各文字を出力する。
    -c num ; 各行の先頭からnumバイトごとに出力時に、間隔を広げた表示をする。
    -l ; 改行文字も除去しないで、出力に用いる。
+   -u ; 入力を utf8 として処理する。
 
 考えられる使い方: 
    ・ よく似た文字列を比較するとき
