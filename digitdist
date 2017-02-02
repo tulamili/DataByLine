@@ -1,14 +1,16 @@
 #!/usr/bin/perl
 
-use 5.018 ; use strict ; use warnings ; 
-use 5.018 ;
+use 5.001 ; use strict ; use warnings ; 
 use Getopt::Std ; getopts '=@:0:g:m:Wu' , \my %o ; 
 use Term::ANSIColor qw[ color :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
 use List::Util qw[ minstr maxstr ] ;
+use Encode qw[ decode encode decode_utf8 encode_utf8 ] ; 
+use FindBin qw[ $Script ] ;
 
-do { use open IO => ':encoding(utf8)' } if $o{u} ; 
 sub cyc_rep ( )  ; 
+
 my ($time00 , $time0) = (time)x2 ; 
+my $read_lines = 0 ;
 my $cyc_len = $o{'@'} // 1e7 ; # 何行毎にレポートを発生させるか。
 my $header = <> if $o{'='} ; 
 my $maxdis = defined $o{m} ? $o{m} : 'Inf' ; # 
@@ -21,10 +23,8 @@ my %chars ; # ; 桁長ごとの、各文字が何個出現したか。
 my $newdis = 0 ;
 
 my %scP ; # 桁位置ごとの、単純な出現個数
-#my %dcountsP ; # 桁位置ごとの、異なる文字列の個数
 my %charsP ; # ; 桁位置ごとの、各文字が何個出現したか。
 
-print STDERR CYAN "Heading Line:\t$header" if defined $header ; # chompしてないことに注意。
 
 main_read () ; 
 exit 0 ; 
@@ -32,13 +32,18 @@ exit 0 ;
 
 sub main_read { 
 
+	$SIG{INT} = sub { printing () ; exit 130 ; } ;
+	do { binmode STDOUT, ':utf8' ; binmode STDERR , ':utf8' } if $o{u} ;
 	while ( <> ) { 
-		chomp ;
+		$read_lines = $. ;
+		chomp ;		
+		$_ = decode_utf8 ($_) if $o{u} ;
 		cyc_rep if $cyc_len && $. % $cyc_len == 0 ; 
 
 		my $len = length ( $_ ) ; 
 		$len = 'Inf' if defined $excepted && m/$excepted/ ; 
 		my @chars = split // , $_ ;
+
 		if ( $o{W} ) { 
 			$simple_counts { $len } ++ ; 
 			$chars {$len} { $_ } ++ for @chars ;
@@ -60,13 +65,23 @@ sub main_read {
 		} ; 
 	}
 
+	print STDERR CYAN "Heading Line:\t$header" if defined $header ; # chompしてないことに注意。
+	printing () ; 
+}
+
+sub printing { 
 	out_eachpos ()  ;
 	print "\n"  if $o{W} ;
 	out_eachwidth () if $o{W} ; 
+	print "\n" ; 
+	my $sec = time - $time00 ;
+	$read_lines =~ s/(?<=\d)(?=(\d\d\d)+($|\D))/,/g ; # 3桁毎にコンマで区切る
+	my $hhmmss = sprintf "%02d:%02d:%02d"  , @{[localtime]} [2,1,0] ; 
+	print STDERR CYAN "$read_lines Lines Read; $sec sec. $hhmmss ($Script) \n" ;
 }
 
-
 sub out_eachpos { 
+
 
 	print join ( "\t" , qw[ pos counts distinct used_char ] ) , "\n" ;
 	for ( sort {$a<=>$b} keys %scP ) { 
@@ -122,10 +137,11 @@ sub out_eachwidth {
        出現した異なる文字とその個数、
 
  オプション:
-    -0 regex ; 設定された異常値の正規表現による指定。出力時に文字幅-1として扱われる。例 : ^999$ 
+	-0 regex ; 設定された異常値の正規表現による指定。出力時に文字幅-1として扱われる。例 : ^999$ 
 	-m num ; 異なる文字列を何個までカウントするかの指定。メモリ不足による異常が起こることを避けるため。
 	-u ; 入出力を utf8 と見なす。(Perl 5.18 で動作確認済み。5.1でも大丈夫だろうか? )
 
+	-W ; 行の文字幅ごとの集計表も出力する。
 
  開発上のメモ: 
    -u で utf8 としてうまく扱うようにすることとしたい。
