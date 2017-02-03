@@ -6,13 +6,18 @@ use Term::ANSIColor qw[ color :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
 use Encode qw[ decode_utf8 ] ;
 binmode STDOUT, ":utf8" if $o{u} ; 
 
-while ( <> ) { 
+my $lastBP = 0 ;
 
+while ( <> ) { 
+	my $BP = tell ; 
+	#$lastBP += 1 ; 
+	my $posR = ($lastBP+1) . "-" . $BP ; #print GREEN "$lastBP-$BP" ;
+	$lastBP = $BP ; 
     $_ = decode_utf8 ( $_ ) if $o{u} ;
 
     my $org = $_ ;
     chomp ; 
-    print "$.:\t" if $o{':'} ; 
+    print "$.\:$posR\t" if $o{':'} ; 
     print $_ , "\n"  if $o{1} ; 
 
     $_ = $org if $o{l} ;
@@ -34,7 +39,7 @@ while ( <> ) {
 
     do { splice @hex , $_ * $o{c} , 0 , '' for reverse 0 .. @hex / $o{c} } if $o{c}  ;
 
-    print $o{1} ? "\t" : ''  , join ( " " , @hex ) ; 
+    print $o{1} || $o{':'} ? "\t" : ''  , join ( " " , @hex ) ; 
     print "\n" ;
 }
 
@@ -52,9 +57,10 @@ while ( <> ) {
    -: ; 入力の行番号も出力する。
    -1 ; 入力も表示する。
    -a ; ダンプに合わせて、各文字を出力する。
+   -u ; 入力を utf8 として処理する。
+
    -c num ; 各行の先頭からnumバイトごとに出力時に、間隔を広げた表示をする。
    -l ; 改行文字も除去しないで、出力に用いる。
-   -u ; 入力を utf8 として処理する。
 
 考えられる使い方: 
    ・ よく似た文字列を比較するとき
