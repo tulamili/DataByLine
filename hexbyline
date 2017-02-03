@@ -3,13 +3,13 @@
 use 5.001 ; use strict ; use warnings ; 
 use Getopt::Std ; getopts ':ac:lu1' , \my %o ; 
 use Term::ANSIColor qw[ color :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
-
 use Encode qw[ decode_utf8 ] ;
-#binmode STDIN , ":utf8" ;
 binmode STDOUT, ":utf8" if $o{u} ; 
 
-while ( <>  ) { 
+while ( <> ) { 
+
     $_ = decode_utf8 ( $_ ) if $o{u} ;
+
     my $org = $_ ;
     chomp ; 
     print "$.:\t" if $o{':'} ; 
@@ -18,16 +18,15 @@ while ( <>  ) {
     $_ = $org if $o{l} ;
     my @chars = split // , $_  ; 
     my @hex = map { sprintf "%02x" , ord $_ } @chars ; #  for ( @chars ) { 
-#    do { splice @hex , $_ * $o{c} , 0 , '' for reverse 0 .. @hex / $o{c} } if $o{c}  ;
 
     if ( $o{a} ) { 
       for ( 0 .. $#chars ) { 
-        $chars [$_ ] = '\n' if $chars[ $_ ] eq "\n" ; 
-        $chars [$_ ] = '\r' if $chars[ $_ ] eq "\r" ; 
-        $chars [$_ ] = '\t' if $chars[ $_ ] eq "\t" ; 
-        $chars [$_ ] .= ' ' x ( ( $hex[$_] eq "feff" ? 4 : length $hex[ $_ ] > 2 ? 3 : 2  ) -length $chars [$_] ); # <-- - 汎用的ではない。トリッキー VisualWidth を使うべし???
+        $chars [ $_ ] = '\n' if $chars[ $_ ] eq "\n" ; 
+        $chars [ $_ ] = '\r' if $chars[ $_ ] eq "\r" ; 
+        $chars [ $_ ] = '\t' if $chars[ $_ ] eq "\t" ; 
+        my $wlen = $hex[$_] eq "feff" ? 4 : length $hex[ $_ ] > 2 ? 3 : 2  ;
+        $chars [ $_ ] .= ' ' x ( $wlen  -length $chars [$_] ); # <-- - 汎用的ではない。トリッキー VisualWidth を使うべし???
       }
-      # grep { $_ .= ' '} @chars ; 
       do { splice @chars , $_ * $o{c} , 0 , '' for reverse 0 .. @chars / $o{c} } if $o{c}  ;
       print $o{1} ? "\t" : ''  , join ( " " , @chars ) ; 
       print "\n" ;
@@ -37,7 +36,6 @@ while ( <>  ) {
 
     print $o{1} ? "\t" : ''  , join ( " " , @hex ) ; 
     print "\n" ;
-
 }
 
 
