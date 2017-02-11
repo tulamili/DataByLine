@@ -46,6 +46,7 @@ else
 
 =encoding utf8
 =head1
+
   $0 file1 file2 
   $0 file1 < file2 
   cat file2 | $0 file1 
