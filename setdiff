@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 use 5.001 ; use strict ; use warnings ; 
-use Getopt::Std ; getopts ':~12f' , \my %o ; 
+use Getopt::Std ; getopts ':~+12f' , \my %o ; 
 use autodie qw[ open ] ; 
 
 my %first ; # 最初に見た
@@ -17,10 +17,16 @@ while ( <$FH> ) {
 }
 
 close $FH ; 
+$. = 0 ;
 
 while ( <> ) { 
     chomp ; 
-    delete $first { $_ } if exists $first { $_ } ; 
+    if ( exists $first { $_ } ) { 
+      delete $first { $_ } 
+    }
+    elsif ( $o{'+'} ) { 
+      $first { $_ } = "+$." ;
+    }
 }
 
 
@@ -33,7 +39,7 @@ unless ( $o{':'} )
 else 
 { 
   for ( sort { $first{$a} <=> $first{$b} } keys %first ) { 
-    my $prefix = do { $o{1} && $first{$_} == $last{$_} ? "$first{$_}" : "$first{$_}-$last{$_}" } ;
+    my $prefix = do { ! exists $last{$_} || $o{1} && $first{$_} eq $last{$_} ? "$first{$_}" : "$first{$_}-$last{$_}" } ;
   	print "$prefix:\t$_\n" ;
   }
 }
@@ -53,6 +59,7 @@ else
   -:  : 出力の際に、各要素が最後に何行目に現れたかを出力する。
   -1  ; 出力の各要素の、出現行番号の最初と最後が一致する場合は、ひとつにまとめる。
   -f  ; 最初意外は見ないことで、メモリの消費を抑制する。
+  -+  ; file2 にあって、file1 にはなかった行要素も抽出する。この場合は、-: の行番号出力指定時に、+記号を付加する。
 
   開発上のメモ : 
     -2 で、標準エラー出力に、逆の差分の結果を出したい。
