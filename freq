@@ -1,7 +1,7 @@
 #!/usr/bin/perl 
 use 5.001 ; use strict ; use warnings ; # Already confirmed that 5.001, 5.011, 5.018 is ok.
 use List::Util qw[ sum sum0 ] ; 
-use Getopt::Std ; getopts '1efkl:nqrsx:y:=%@:' , \my %o  ; 
+use Getopt::Std ; getopts ':1efkl:nqrsx:y:=%@:' , \my %o  ; 
 use Term::ANSIColor qw/color :constants/ ; $Term::ANSIColor::AUTORESET = 1 ;
 use FindBin qw[ $Script ] ; 
 use autodie qw [ open ] ;
@@ -14,6 +14,8 @@ my $time0 = time ;
 my $cyc_len = $o{'@'} // 1e7 ; # 何行毎にレポートを発生させるか。
 my %strcnt ; # 数える対象の文字列(各行から最後の改行文字列を取り除いたもの) に対して、数えた数を入れる。
 my %strcntX ; # $strcntX{$_}{$tail} で度数を表す。
+my %strfst ; # 最初の出現位置を保持
+my %strlst ; # 最後の出現位置を保持
 my $header = <> if $o{q/=/} ;
 my $isep = $o{','} //= do { $o{','} //= "\t" ; eval qq[qq[$o{','}]] } ; # 入力の区切り文字 
 my $osep = "\t" ; # 出力用セパレータ
@@ -72,18 +74,21 @@ sub reading ( ) {
     # ここから処理
     $SIG{ INT } = \& sigint1 ;
 
-    # 動作の高速化のため、似た様な処理を3個をさらに2グループも書いてしまった。もっと良い方法は無いだろうか?
-    if ( ! $o{l} ) { 
-        if ( ! exists $o{x} && ! $cyc_len ) { while ( <> ) { chomp ; $strcnt { $_ } ++ } } # 最高速
-        elsif ( ! exists $o{x} ) { while ( <> ) { chomp ; cyc_rep if -- $cycred <= 0  ; $strcnt{ $_ } ++ } }
-        else { while ( <> ) { chomp ; cyc_rep if -- $cycred <= 0 ; treat_x ; $strcnt { $_ } ++ } } 
-    }
-    else { 
-        if ( ! exists $o{x} && ! $cyc_len ) { while ( <> ) { chomp ; next unless $gl{$_} ; $strcnt { $_ } ++ } } # 最高速
-        elsif ( ! exists $o{x} ) { while ( <> ) { chomp ; next unless $gl{$_} ; cyc_rep if -- $cycred <= 0  ; $strcnt{ $_ } ++ } }
-        else { while ( <> ) { chomp ; next unless $gl{$_} ; cyc_rep if -- $cycred <= 0 ; treat_x ; $strcnt { $_ } ++ } } 
-    }
+    sub fcntbare { $strcnt { $_ } ++ }
+    sub fcntfilt { $strcnt { $_ } ++ if exists $gl { $_ } }
+    sub fcntbareC { $strcnt { $_ } ++ ; $strfst { $_ } //= $. ; $strlst { $_ } = $. }
+    sub fcntfiltC { if(exists $gl{$_} ){ $strcnt { $_ } ++ ; $strfst { $_ } //= $. ; $strlst { $_ } = $. } } 
+    sub fcnt ; 
 
+    * fcnt = * fcntbare if ! exists $o{l} ; 
+    * fcnt = * fcntfilt if exists $o{l} ;
+    * fcnt = * fcntbareC if ! exists $o{l} && $o{':'} ; 
+    * fcnt = * fcntfiltC if exists $o{l} && $o{':'} ;
+
+    # 動作の高速化のため、似た様な処理を3個も書いてしまった。もっと良い方法は無いだろうか?
+    if ( ! exists $o{x} && ! $cyc_len ) { while ( <> ) { chomp ; fcnt } } # 最高速
+    elsif ( ! exists $o{x} ) { while ( <> ) { chomp ; cyc_rep if -- $cycred <= 0  ; fcnt } }
+    else { while ( <> ) { chomp ; cyc_rep if -- $cycred <= 0 ; treat_x ; fcnt } } 
 
     $readLines = $. ;
 }
@@ -111,47 +116,63 @@ sub output ( ) {
     @k = sort { $a cmp $b } @k if $o{k} ;  # -k オプションによりキー文字列であらかじめ、ソートする 
     @k = sort { $a <=> $b } @k if $o{n} ; # -n オプションによりキー文字列であらかじめ、ソートする 
     @k = reverse @k if $o{r} ;   # r オプションで逆順ソート
-    my $totalSum = sum0 ( values %strcnt ) ; # 総行数の格納。
-    my $outLines = 0 ; # 出力した行数
-    my $cumsum =  0  ; # 累和カウンタ
+    our $totalSum = sum0 ( values %strcnt ) ; # 総行数の格納。
+    our $outLines = 0 ; # 出力した行数
+    our $cumsum =  0  ; # 累和カウンタ
 
     # 書き出し
     $header = "LINE_STR" unless defined $header ; 
-    $header = $header . $osep . "RIGHT_FIELDS" if $o{x} ;
     $header = "FREQ" . $osep . $header ; 
     $header = "RATIO" . $osep . $header if $o{'%'} ; 
     $header = "ACCUM" . $osep . $header if $o{'s'} ;
     $header = "CUMRA" . $osep . $header if $o{'s'} && $o{'%'} ;
+    $header = "WHERE" . $osep . $header if $o{':'} ; 
+    $header = $header . $osep . "RIGHT_FIELDS.." if $o{x} ;
     $header .= "\n" ;
     $o{'='} ? print $header : $o{q} ? 0 : print STDERR GREEN $header ;  
 
+
     for ( @k ) { 
-        $strcnt{ $_ } //=  0 ;
-        next unless y_filter ( $strcnt{$_} ) ; 
 
-        if ( $o{s} ) { # -s オプションにより、累和を表示。 
-            $cumsum += $strcnt { $_ } ;
-            print sprintf "%5.2f%%$osep", 100.0 * $cumsum / $totalSum if $o{'%'} ;   
-            print $cumsum, $osep ;
-        }     ; 
-
-        printf "%5.3f%%$osep", 100.0 * $strcnt{$_} / $totalSum if $o{'%'} ;  
-        print $o{1} ? $_ : $strcnt{$_} . $osep . $_ ; # -1オプションがあれば個数を表示しない。
-
-        if ( exists $o{x} ) { 
-            my @keys = keys %{ $strcntX{ $_ } } ; 
-            @keys = sort {  $strcntX{$_}{$b} <=> $strcntX{$_}{$a} } @keys ; 
-            for my $k ( @keys ) { 
-                print "\t[$k]x$strcntX{$_}{$k}" ;
-            }
+        sub tailx {
+            my @keys = sort {  $strcntX{$_}{$b} <=> $strcntX{$_}{$a} } keys %{ $strcntX{ $_ } } ; 
+            my $out = '' ; 
+            for my $k ( @keys ) { $out .= "\t[$k]x$strcntX{$_}{$k}" } ; 
+            return $out ; 
         }
 
+        sub headS { 
+            $cumsum += $strcnt { $_ } ;
+            return $cumsum . sprintf ( "\t%5.2f%%", 100.0 * $cumsum / $totalSum) if $o{'%'} ;   
+            return $cumsum ;
+        }
+
+        sub headW { 
+            $strfst{$_} //= 0 ; 
+            $strlst{$_} //= 0 ; 
+            return "$strfst{$_}-$strlst{$_}:" ; 
+        }
+
+        $strcnt{ $_ } //=  0 ;
+        next unless y_filter ( $strcnt{$_} ) ; 
+        print headW () , "\t" if exists $o{':'} ; # -: オプションにより、どの行番号で現れたのかを出力。
+        print headS () , "\t" if exists $o{s} ; # -s オプションにより、累和を表示。 
+        printf "%5.2f%%$osep", 100.0 * $strcnt{$_} / $totalSum if $o{'%'} ;  
+        print $o{1} ? $_ : $strcnt{$_} . $osep . $_ ; # -1オプションがあれば個数を表示しない。
+        print tailx()  if exists $o{x} ; 
         print "\n" ;
         $outLines ++ ; 
     } 
+
+
     my $sec = time - $time0 ; # このプログラムの処理にかかった秒数。比較する2個の時刻は秒単位なので、±1秒未満の誤差は発生する。
     $readLines //= $. ; # Ctrl+Cの連打で必要となる処理。
-    print STDERR CYAN "$readLines lines processed. $totalSum lines are counted. $outLines lines output. ($Script ; $sec sec.)\n" unless $o{q} ;
+
+    return if exists $o{q} ; 
+    print STDERR CYAN "$readLines lines processed. " ; 
+    print STDERR CYAN "$totalSum lines are counted. " ; 
+    print STDERR CYAN "$outLines lines output. " ; 
+    print STDERR CYAN "($Script ; $sec sec.)\n"
 }
 
 ## ヘルプの扱い
@@ -184,6 +205,7 @@ sub HELP_MESSAGE {
     -= : 先頭行をヘッダ(列名の並びなどでありデータでは無い)と見なして処理
     -@ num : 入力ファイルを読む際に、何行毎に標準エラー出力に報告を出すか。未指定なら1000万行毎。
     -l ファイル名 : 個数を数える文字列の対象を含んだファイル名を指定する。出力順序がファイルの各行に記載の順序になる。
+    -l は、プロセス置換 <( ) を使うと便利。; -l により、メモリを節約できる。; -l と -@ が共にあると、見つかった行数しかざたない。
 
  [出力のオプション]
 
@@ -211,10 +233,6 @@ sub HELP_MESSAGE {
   3. さらにそれから1秒以内にCtrl+Cが押下されると、停止する。
 
 その他: 
-
-    Ctrl+C により、途中経過を出力したりする。何度も押すと終了する。
-    他、途中どこまで数えたか、1,2,5万、10,20,50万、100,200,500万行に達したことなど、標準エラー出力に出したいが、未実装。
-   
-    -l : プロセス置換 <( ) を使うと便利。; -l により、メモリを節約できる。; -l と -@ が共にあると、見つかった行数しかざたない。
+  * freqfreq のような、頻度の頻度を出力するオプションを作りたい。オプションは -F で表したい。
 
 =cut
