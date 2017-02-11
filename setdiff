@@ -1,39 +1,41 @@
 #!/usr/bin/perl
 use 5.001 ; use strict ; use warnings ; 
-use Getopt::Std ; getopts ':~1' , \my %o ; 
+use Getopt::Std ; getopts ':~12f' , \my %o ; 
 use autodie qw[ open ] ; 
 
+my %first ; # 最初に見た
+my %last ; 
+
 unshift @ARGV  , splice @ARGV , 1 , 1 if $o{'~'} ; # 条件次第で先頭とその次を入れ替える。
-#print join "," , @ARGV ; exit 2 ; 
 open my $FH , '<' , shift @ARGV ; 
 $SIG{ INT } = sub { close $FH ; exit 130 } ; 
-my %seen ; 
 
-unless ( $o{1} ) { 
-	while ( <$FH> ) { 
-	    chomp ; 
-	    $seen { $_ }  = $. ; 
-	}
-} else { 
-	while ( <$FH> ) { 
-	    chomp ; 
-	    $seen { $_ }  = $. unless exists $seen { $_ } ;
-	}
+while ( <$FH> ) { 
+    chomp ; 
+    $first { $_ }  //= $. ;
+    $last { $_ }  = $. unless $o{f} ;
 }
-
 
 close $FH ; 
 
 while ( <> ) { 
     chomp ; 
-    delete $seen { $_ } if exists $seen { $_ } ; 
+    delete $first { $_ } if exists $first { $_ } ; 
 }
 
 
-unless ( $o{':'} ) { 
-	print "$_\n" for ( sort keys %seen ) ; 
-} else { 
-	print "$_\t$seen{$_}\n" for ( sort { $seen{$a} <=> $seen{$b} } keys %seen ) ; 
+unless ( $o{':'} ) 
+{ 
+  for ( sort keys %first ) {
+  	print "$_\n" ;
+  }
+} 
+else 
+{ 
+  for ( sort { $first{$a} <=> $first{$b} } keys %first ) { 
+    my $prefix = do { $o{1} && $first{$_} == $last{$_} ? "$first{$_}" : "$first{$_}-$last{$_}" } ;
+  	print "$prefix:\t$_\n" ;
+  }
 }
 
 =encoding utf8
@@ -49,8 +51,11 @@ unless ( $o{':'} ) {
 
   -~  : file1 と file2 の順序を交換する。
   -:  : 出力の際に、各要素が最後に何行目に現れたかを出力する。
-  -1  ; 出力の際に、何行目に現れたについて、最後ではなくて最初の行の番号を出力。-: と共に用いる。
+  -1  ; 出力の各要素の、出現行番号の最初と最後が一致する場合は、ひとつにまとめる。
+  -f  ; 最初意外は見ないことで、メモリの消費を抑制する。
 
+  開発上のメモ : 
+    -2 で、標準エラー出力に、逆の差分の結果を出したい。
 =cut
 
 ## ヘルプの扱い
