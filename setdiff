@@ -17,7 +17,7 @@ while ( <$FH> ) {
 }
 
 close $FH ; 
-$. = 0 ;
+#$. = 0 ;
 
 while ( <> ) { 
     chomp ; 
