@@ -43,6 +43,20 @@ while ( <> ) {
     print "\n" ;
 }
 
+sub VERSION_MESSAGE {}
+sub HELP_MESSAGE {
+    use FindBin qw[ $Script ] ; 
+    my ($a1,$L,$opt,@out) = ($ARGV[1]//'',0,'^o(p(t(i(o(ns?)?)?)?)?)?$') ;
+    open my $FH , '<' , $0 ;
+    while(<$FH>){
+        s/\$0/$Script/g ;
+        $out[$L] .= $_ if s/^=head1\s*(.*)\n/$1/s .. s/^=cut\n//s && ++$L and $a1 =~ /$opt/i ? m/^\s+\-/ : 1 ;
+    }
+    close $FH ;
+    print $ENV{LANG} =~ m/^ja/ ? $out[0] : $out[1] // $out[0] ;
+    exit 0 ;
+}
+
 
 =encoding utf8
 
@@ -68,17 +82,3 @@ while ( <> ) {
 
 =cut
 
-
-## ヘルプの扱い
-sub VERSION_MESSAGE {}
-sub HELP_MESSAGE {
-    use FindBin qw[ $Script ] ; 
-    $ARGV[1] //= '' ;
-    open my $FH , '<' , $0 ;
-    while(<$FH>){
-        s/\$0/$Script/g ;
-        print $_ if s/^=head1// .. s/^=cut// and $ARGV[1] =~ /^o(p(t(i(o(ns?)?)?)?)?)?$/i ? m/^\s+\-/ : 1;
-    }
-    close $FH ;
-    exit 0 ;
-}
