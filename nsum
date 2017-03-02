@@ -1,0 +1,141 @@
+#!/usr/bin/perl
+
+use 5.001 ; use strict ; use warnings ; 
+use Getopt::Std ; getopts '"=1nq' , \my%o ; 
+use Scalar::Util qw [ looks_like_number ] ; 
+use Term::ANSIColor qw[ color :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
+use FindBin '$Script' ;
+
+sub input ; 
+sub output ;
+sub cyc_rep ; 
+
+* LLN = * looks_like_number ; 
+my $psum = 0 ; # 正の数の和
+my $msum = 0 ; # 負の数の和
+my $gsum ; # 両者の合計
+my $nnum = 0 ; # 数以外の和
+my ($time00, $time0) = (time) x2  ; 
+my $cyc_last_line ; 
+my $cyc_sec = $o{'"'} // 10 ; # 何行毎にレポートを発生させるか。
+
+input () ; 
+output () ; 
+exit 0 ; 
+
+sub input { 
+	my $header = <> if $o{'='} ;
+
+	$SIG{ALRM} = sub { cyc_rep ; alarm $cyc_sec } ; 
+	alarm $cyc_sec ; 
+
+	if ( $o{n} ) { 
+
+		$_ > 0 ? $psum : $msum += $_ while <> ; 
+	}
+	else { 
+		while ( <> ) {
+		    if ( ! LLN ( $_ ) ) { $nnum ++ ; next } 
+		    if ( $_ >= 0 ) { $psum = "$psum" + "$_" } else { $msum = "$msum" + "$_" } 
+		}
+	}
+	$gsum = $psum + $msum ; 
+}
+
+
+sub output { 
+
+	if ( $o{1} ) { 
+	    print $gsum , "\n" ; 
+	} else { 
+		print join ( "\t" , qw[ sum + - non-numeric ] ) , "\n" ; 
+		print join ( "\t" , $gsum , $psum , $msum , $nnum ) , "\n" ; 
+	}
+
+	if ( ! $o{q} ) { 
+		my $lines = $. ; 
+		$lines =~ s/(?<=\d)(?=(\d\d\d)+($|\D))/,/g ; # 3桁区切り コンマ区切り
+		my $sec = time - $time00 ; 
+		print STDERR CYAN "$lines input lines have read. $sec seconds. ($Script)\n" ;
+	}
+}
+
+
+sub cyc_rep ( ) {
+    use FindBin '$Script' ;
+    $| = 1 ; 
+    my $num = $. ; 
+    my $diff = ' (+' . ( $num - $cyc_last_line )  . ')' if defined $cyc_last_line ; 
+    $cyc_last_line = $num ; 
+    $num =~ s/(?<=\d)(?=(\d\d\d)+($|\D))/,/g ; # 3桁毎にコンマで区切る
+    $diff =~ s/(?<=\d)(?=(\d\d\d)+($|\D))/,/g if defined $diff ; 
+    $diff //= '' ; 
+    print STDERR GREEN $num , $diff , ":\t" , sprintf "%02d:%02d:%02d" , ( localtime )[2,1,0] ;  #  <-- 標準出力に書込み
+    print STDERR "\t" , GREEN  time - $time0 , " sec.\t($Script)" ; 
+    chomp (my $line_tmp = $_ ) ; 
+    print STDERR BLUE "\t Read Input:\t" , $line_tmp ; 
+    $time0 = time ;
+    print STDERR "\n" ;
+}
+
+
+sub VERSION_MESSAGE {}
+sub HELP_MESSAGE {
+    use FindBin qw[ $Script ] ; 
+    my ($a1,$L,$opt,@out) = ($ARGV[1]//'',0,'^o(p(t(i(o(ns?)?)?)?)?)?$') ;
+    open my $FH , '<' , $0 ;
+    while(<$FH>){
+        s/\$0/$Script/g ;
+        $out[$L] .= $_ if s/^=head1\s*(.*)\n/$1/s .. s/^=cut\n//s && ++$L and $a1 =~ /$opt/i ? m/^\s+\-/ : 1 ;
+    }
+    close $FH ;
+    print $ENV{LANG} =~ m/^ja/ ? $out[0] : $out[1] // $out[0] ;
+    exit 0 ;
+}
+
+
+=encoding utf8
+
+=head1
+
+  $0
+
+    改行で区切られたデータについて、数の総和を計算する。
+    加算対象の数は、正負に分け、さらに10進数として扱うことで
+    誤差の問題を回避している。
+
+オプション : 
+   -1 ; 総和のみを出力。正の数の和、負の数の和、数で無いものの個数を表示しない。
+   -n ; 数であるかの判定を省略し、さらに10進数不動小数点に伴う誤差を考慮しない。2倍程度計算を高速化する。
+   -q ; 標準エラー出力への何行を読んだかの情報を出力しない。
+   -= ; 最初の行を合算の対象としない。データファイルの1行目は、データの実体の値でない場合に対応する。
+   -\" num ; 指定秒数ごとに、どこまで計算したかの報告をする。未指定なら10秒ごと。
+
+   --help ; この$0のヘルプマニュアルを表示。
+   --help opt ; この$0のヘルプマニュアルの内、オプションの部分のみ表示
+
+=cut
+
+
+
+=head1
+
+  $0
+
+    Total numeric summation is calculated for data records which are separated by
+    line end characters. The added numbers are divided into positive and negative
+    ones so that numeric summation error would be avoided. Also numbers are considered
+    to be decimal number so that you can add up 0.0001, 10000 times which ends up 1.
+
+Options : 
+   -1 ; Only the total sum is output. Not prints out other sums such as the positive sum and the negative sum, the non-numeric number.
+   -n ; Omits to check if numeric or not. Also omits decimal treatment to add up.
+   -q ; Secondary information outputting into STDERR is not performed.
+   -= ; First data line is omitted to sum up. It is for when the first line is just a comment.
+   -\" num ; Cyclically reports how many lines are read. The lengths of seconds is specified or it will be 10.
+
+   --help ; shows this help manual. 
+   --help options ; shows the option parts of the help manual.
+
+=cut
+
