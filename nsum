@@ -14,7 +14,7 @@ sub cyc_rep ;
 my $psum = 0 ; # 正の数の和
 my $msum = 0 ; # 負の数の和
 my $gsum ; # 両者の合計
-my $nnum = 0 ; # 数以外の和
+my $nnum = 0 ; # 数以外の個数(行数)
 my ($time00, $time0) = (time) x2  ; 
 my $cyc_last_line ; 
 my $cyc_sec = $o{'"'} // 10 ; # 何行毎にレポートを発生させるか。
