@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 use 5.001 ; use strict ; use warnings ; 
-use Getopt::Std ; getopts '"=1nq' , \my%o ; 
+use Getopt::Std ; getopts '"=anq' , \my%o ; 
 use Scalar::Util qw [ looks_like_number ] ; 
 use Term::ANSIColor qw[ color :constants ] ; $Term::ANSIColor::AUTORESET = 1 ;
 use FindBin '$Script' ;
@@ -45,7 +45,7 @@ sub input {
 
 sub output { 
 
-	if ( $o{1} ) { 
+	if ( ! $o{a} ) { 
 	    print $gsum , "\n" ; 
 	} else { 
 		print join ( "\t" , qw[ sum + - non-numeric ] ) , "\n" ; 
@@ -105,7 +105,7 @@ sub HELP_MESSAGE {
     誤差の問題を回避している。
 
 オプション : 
-   -1 ; 総和のみを出力。正の数の和、負の数の和、数で無いものの個数を表示しない。
+   -a ; 総和のみでなく、正の数の和、負の数の和、数で無いものの個数も表示する。
    -n ; 数であるかの判定を省略し、さらに10進数不動小数点に伴う誤差を考慮しない。2倍程度計算を高速化する。
    -q ; 標準エラー出力への何行を読んだかの情報を出力しない。
    -= ; 最初の行を合算の対象としない。データファイルの1行目は、データの実体の値でない場合に対応する。
@@ -116,6 +116,7 @@ sub HELP_MESSAGE {
 
 開発メモ
   * -2 というオプションで、層別の足し算を可能とする。(2列以上のデータが来た場合に、1列目の数値を2列目以降の文字列でビンに分けて足す。)
+  * -1 というオプションで、各行毎にそれまでの総和(累積和)を出力する様にしたい。
 =cut
 
 
