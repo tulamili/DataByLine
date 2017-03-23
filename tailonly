@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 use 5.001 ; use strict ; use warnings ; 
-use Getopt::Std ; getopts 'qt' , \my %o ; 
+use Getopt::Std ; getopts 'l:q' , \my %o ; 
 use Term::ANSIColor qw[ :constants ] ; $Term::ANSIColor::AUTORESET = 1 ; 
 use FindBin qw[ $Script ] ; 
 
@@ -10,14 +10,19 @@ $| = 1 ;
 my $time00 = time ; 
 #$o{g} //= 12 ; 
 #my $spaces = ' ' x $o{g} ;
-
+$o{l} //= 3 ; 
+my $res = $o{l} ;
 $SIG{INT} = sub { output () ; exit 130 } ; 
-print "\n\e[1A" ; # print "\e[1B]" ;
+#print "\n\e[2A\e[s" ; # print "\e[1B]" ;
+print "\n" x ( $o{l} ) ; 
+print "\e[1A" x $o{l} ; 
+#print "\e[1A" x $o{l} ; 
+print "\e[s" ; 
 while ( <> ) { 
-    #chomp ; 
-    s/\t/    /g if $o{t} ;
-    #print "\e[0K" . "$.: " . $_ . $spaces . "\r" ; 
-    print "\e[s\e[0K" . " $.:\t" . $_ . "\e[u" ; # \e[0K カーソルから右端までクリア
+    $_ = "$.:\t$_" ;
+    if ( $res == 0 ) { $res = $o{l} ; print "\e[u\e[0J" } ;  
+    print $_   ; 
+    $res -- ; 
 }
 output ( ) ; 
 exit 0 ; 
@@ -25,7 +30,7 @@ exit 0 ;
 sub output ( ) { 
 
   my $secs = time - $time00 ;
-  print STDERR "\n" ; 
+  #print STDERR "\n" ; 
     # <-- もしもこのプログラムの出力をファイルに出力した場合に、
     #各行の区切りが¥rで最後だけ¥nは不都合が起きそうな気がするので、
     # ここは STDOUT でなくて、 STDERR に出力するようにした。
@@ -58,8 +63,9 @@ sub HELP_MESSAGE {
   オプション: 
 
 	  # -g num  ; 出力で追加する空白文字の個数を指定。未指定なら12。
+    -l num ; 何行を表示するか。
     -q ; 操作の終了後に、処理行数と秒数の二次情報を出力しない。
-    -t ; 入力のタブ文字を空白文字4個に変換して、出力をする。
+    #-t ; 入力のタブ文字を空白文字4個に変換して、出力をする。
 
    開発メモ: 
      ターミナル制御をうまく使って、最後の1行だけではなくて、
