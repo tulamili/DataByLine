@@ -1,0 +1,79 @@
+#!/usr/bin/perl
+use 5.001 ; use strict ; use warnings ; 
+use Getopt::Std ; getopts 'qt' , \my %o ; 
+use Term::ANSIColor qw[ :constants ] ; $Term::ANSIColor::AUTORESET = 1 ; 
+use FindBin qw[ $Script ] ; 
+
+sub output ( ) ; 
+
+$| = 1 ; 
+my $time00 = time ; 
+#$o{g} //= 12 ; 
+#my $spaces = ' ' x $o{g} ;
+
+$SIG{INT} = sub { output () ; exit 130 } ; 
+print "\n\e[1A" ; # print "\e[1B]" ;
+while ( <> ) { 
+    #chomp ; 
+    s/\t/    /g if $o{t} ;
+    #print "\e[0K" . "$.: " . $_ . $spaces . "\r" ; 
+    print "\e[s\e[0K" . " $.:\t" . $_ . "\e[u" ; # \e[0K カーソルから右端までクリア
+}
+output ( ) ; 
+exit 0 ; 
+
+sub output ( ) { 
+
+  my $secs = time - $time00 ;
+  print STDERR "\n" ; 
+    # <-- もしもこのプログラムの出力をファイルに出力した場合に、
+    #各行の区切りが¥rで最後だけ¥nは不都合が起きそうな気がするので、
+    # ここは STDOUT でなくて、 STDERR に出力するようにした。
+  print STDERR GREEN "Output: $. lines in $secs seconds ($Script)\n" unless $o{q} ; 
+}
+
+sub VERSION_MESSAGE {}
+sub HELP_MESSAGE {
+    use FindBin qw[ $Script ] ; 
+    my ($a1,$L,$opt,@out) = ($ARGV[1]//'',0,'^o(p(t(i(o(ns?)?)?)?)?)?$') ;
+    open my $FH , '<' , $0 ;
+    while(<$FH>){
+        s/\$0/$Script/g ;
+        $out[$L] .= $_ if s/^=head1\s*(.*)\n/$1/s .. s/^=cut\n//s && ++$L and $a1 =~ /$opt/i ? m/^\s+\-/ : 1 ;
+    }
+    close $FH ;
+    print $ENV{LANG} =~ m/^ja/ ? $out[0] : $out[1] // $out[0] ;
+    exit 0 ;
+}
+
+
+=encoding utf8
+
+=head1
+
+  $0
+
+    最終行のみを表示する。(開発途上)
+
+  オプション: 
+
+	  # -g num  ; 出力で追加する空白文字の個数を指定。未指定なら12。
+    -q ; 操作の終了後に、処理行数と秒数の二次情報を出力しない。
+    -t ; 入力のタブ文字を空白文字4個に変換して、出力をする。
+
+   開発メモ: 
+     ターミナル制御をうまく使って、最後の1行だけではなくて、
+     複数行を出力したい。もしくは、最後のN行または、N行毎を
+     同じ一つの行に連結する、という方法もある。
+
+
+=cut
+
+
+
+=head1
+
+=cut
+
+
+
